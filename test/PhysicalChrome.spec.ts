@@ -14,24 +14,20 @@ describe("PhysicalChrome", ()=>{
     });
     it("builds a request", async ()=>{
         let req = await physical.request();
+        console.log(req);
         expect(req.author).to.equal("physical-chrome");
         expect(req.supported[0]).to.equal("WebRTC");
         expect(req.body[0].length).to.be.greaterThan(100);
     });
-    it("responds to a WebSocket-Consumer Request", async ()=>{
-        let res = await physical.respond({
-            author: "",
-            supported: ["WebSocket-Consumer"],
-            body: [""]
-        });
+    it("responds to a WebRTC Request", async ()=>{
+        let res = await physical.respond(await partner.request());
         expect(res.author).to.equal("physical-chrome");
         expect(res.protocol).to.equal("WebRTC");
         expect(res.body[0].length).to.be.greaterThan(100);
     });
-    it("responds to a WebSocket-Provider Request", async ()=>{
+    it("completes a WebRTC Handshake", async ()=>{
         let res = await physical.respond(await partner.request());
-        expect(res.author).to.equal("physical-chrome");
-        expect(res.protocol).to.equal("WebSocket-Consumer");
+        partner.open(res);
     });
     it("opens on requester side", done =>{
         physical.setOnOpen(()=>done());

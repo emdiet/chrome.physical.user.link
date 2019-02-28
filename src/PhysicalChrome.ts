@@ -44,6 +44,10 @@ export class PhysicalChrome implements Physical{
         let self = this;
         if(this.state != State.INITIATED) throw("wrong state exception");
         if(ack.protocol === "WebRTC"){
+            this.rtcPeerConnection.setRemoteDescription(
+                    {sdp : ack.body[0], type : "answer"}
+                );
+            //flow continues in switch (self.rtcPeerConnection.iceConnectionState)
 
         }else if(ack.protocol == "WebSocket-Provider"){
             this.terminateRTC();
@@ -60,6 +64,7 @@ export class PhysicalChrome implements Physical{
     }
 
     private doOnNegotiationSuccess(){
+        this.state = State.OPEN;
         this.onOpen();
     }
 

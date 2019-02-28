@@ -6,6 +6,7 @@ module.exports = {
         'test':'./test/index.ts'
     },
     devtool: 'inline-source-map',
+    mode: "development",
     module: {
         rules: [
             {
