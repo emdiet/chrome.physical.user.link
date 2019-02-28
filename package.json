@@ -1,0 +1,43 @@
+{
+  "name": "physical-node",
+  "version": "1.0.1",
+  "description": "virtual physical network infrastructure layer for chrome",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "prepare": "npm run build && npm run test",
+    "build": "tsc && webpack",
+    "test": "npm run build echo \"Warn: tests must be run in the browser\""
+  },
+  "keywords": [
+    "physical",
+    "network",
+    "infrastructure",
+    "socket",
+    "p2p",
+    "p2s",
+    "s2p",
+    "s2s",
+    "stream",
+    "chrome"
+  ],
+  "author": "emdiet",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emdiet/chrome.physical.user.link.git"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/chai": "^4.1.7",
+    "@types/mocha": "^5.2.6",
+    "chai": "^4.2.0",
+    "mocha": "^6.0.2",
+    "ts-loader": "^5.3.3",
+    "typescript": "^3.3.3333",
+    "webpack": "^4.29.5",
+    "webpack-cli": "^3.2.3"
+  },
+  "dependencies": {
+    "physical": "^3.0.3"
+  }
+}
