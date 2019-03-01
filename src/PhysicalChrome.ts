@@ -81,10 +81,15 @@ export class PhysicalChrome implements Physical{
                 case "failed":
                 case "disconnected": if(!config.permissiveMode) break;
                 case "closed": self.close(); break;
-                case "connected": self.doOnNegotiationSuccess(); break;
+                case "connected": this.socket.send("RFT"); break;
             }
         };
-        this.socket.onmessage = event => self.onMessage(event.data);
+        this.socket.onmessage = event => {
+            if(event.data === "RFT"){
+                self.doOnNegotiationSuccess();
+                self.socket.onmessage = event => self.onMessage(event.data);
+            }
+        }
     }
 
     private async buildOffer() : Promise<string> {
