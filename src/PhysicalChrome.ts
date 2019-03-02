@@ -11,62 +11,15 @@ enum State{
 }
 
 export class PhysicalChrome implements Physical{
-    private rtcPeerConnection : RTCPeerConnection = null as any;
-    private socket : RTCDataChannel | WebSocket = null as any;
 
     private state = State.EMPTY;
-
-    private sendLambda : (message : string)=>void = null as any;
 
     private onMessage = ( str : string ) => { console.warn("onmessage not set!") };
     private onOpen = () => { console.warn("onOpen not set!") };
     private onClose = () => { console.warn("onClose not set!") };
 
-    close(): void {
-        if(this.state != State.CLOSED) this.onClose();
-        this.state = State.CLOSED;
-
-        this.rtcPeerConnection && this.rtcPeerConnection.close();
-        try{
-            this.socket && this.socket.close();
-        }catch (e) {
-            if(e.message === 'WebSocket was closed before the connection was established'){
-                //allowed
-            } else {
-                throw e;
-            }
-        }finally {
-            delete this.onMessage;
-        }
-    }
-
-    open(ack: ACK): void {
-        let self = this;
-        if(this.state != State.INITIATED) throw("wrong state exception");
-        if(ack.protocol === "WebRTC"){
-            this.rtcPeerConnection.setRemoteDescription(
-                    {sdp : ack.body[0], type : "answer"}
-                );
-            //flow continues in switch (self.rtcPeerConnection.iceConnectionState)
-
-        }else if(ack.protocol == "WebSocket-Provider"){
-            this.terminateRTC();
-            this.connectToWebSocket(ack.body[0]).
-            then(()=>self.webSocketOpenFinalizeHandshake());
-        }
-    }
-
-    private terminateRTC(){
-        this.socket.close();
-        delete this.socket;
-        this.rtcPeerConnection.close();
-        delete this.rtcPeerConnection;
-    }
-
-    private doOnNegotiationSuccess(){
-        this.state = State.OPEN;
-        this.onOpen();
-    }
+    private socket : WebSocket | RTCDataChannel = null as any;
+    private rtcPeerConnection : RTCPeerConnection = null as any;
 
     private buildRTCPeerConnection(){
         let self = this;
@@ -76,20 +29,9 @@ export class PhysicalChrome implements Physical{
             negotiated: true,
             id: 0
         });
-        this.rtcPeerConnection.oniceconnectionstatechange = () => {
-            switch (self.rtcPeerConnection.iceConnectionState) {
-                case "failed":
-                case "disconnected": if(!config.permissiveMode) break;
-                case "closed": self.close(); break;
-                case "connected": this.socket.send("RFT"); break;
-            }
-        };
-        this.socket.onmessage = event => {
-            if(event.data === "RFT"){
-                self.doOnNegotiationSuccess();
-                self.socket.onmessage = event => self.onMessage(event.data);
-            }
-        }
+        this.socket.onmessage = event => self.onMessage(event.data);
+        this.socket.onopen = () => {self.state = State.OPEN; self.onOpen()};
+        this.socket.onclose = () => self.onClose();
     }
 
     private async buildOffer() : Promise<string> {
@@ -100,12 +42,6 @@ export class PhysicalChrome implements Physical{
             self.rtcPeerConnection.onicecandidate = ev => !ev.candidate && a()});
         // @ts-ignore, if there's an NPE here the whole node is toast anyways.
         return self.rtcPeerConnection.localDescription.sdp;
-    }
-
-    private webSocketOpenFinalizeHandshake(){
-        this.socket.send("RFT"); // ready for transmission
-        this.state = State.OPEN;
-        this.onOpen();
     }
 
     async request(): Promise<SYNQ> {
@@ -119,7 +55,7 @@ export class PhysicalChrome implements Physical{
         }
     }
 
-    private async connectToWebSocket(url : string){
+    private connectToWebSocket(url : string){
         let self = this;
 
         this.socket = new WebSocket(url);
@@ -129,14 +65,14 @@ export class PhysicalChrome implements Physical{
                     self.onMessage(event2.data);
                 };
                 self.state = State.OPEN;
-                self.doOnNegotiationSuccess();
+                self.onOpen(); //connection opened successfully.
             }else{
                 console.error("peer failed to honor contract");
                 console.error("out of state message: "+event.data);
                 self.close();
             }
         };
-        this.socket.onopen = ()=>console.log("opening socket");
+        this.socket.onopen = ()=>console.info("WsConnection opened"); //doesn't mean handshake is complete
         this.socket.onclose = ()=>self.close();
     }
 
@@ -154,6 +90,13 @@ export class PhysicalChrome implements Physical{
         return self.rtcPeerConnection.localDescription.sdp;
     }
 
+    private terminateRTC(){
+        this.socket && this.socket.close();
+        delete this.socket;
+        this.rtcPeerConnection && this.rtcPeerConnection.close();
+        delete this.rtcPeerConnection;
+    }
+
     async respond(synq: SYNQ): Promise<ACK> {
         if(this.state != State.EMPTY) throw("wrong state exception");
         this.state = State.RESPONDED;
@@ -167,8 +110,6 @@ export class PhysicalChrome implements Physical{
             }
         }else if(synq.supported.includes("WebSocket-Provider")){
             let url = synq.body[synq.supported.indexOf("WebSocket-Provider")];
-            //destroy rtc
-            this.terminateRTC();
             //build ws
             await this.connectToWebSocket(url); //could be run asynchronously
             return {
@@ -179,6 +120,29 @@ export class PhysicalChrome implements Physical{
         }else{
             throw "No Compatible Protocol";
         }
+    }
+
+    open(ack: ACK): void {
+        let self = this;
+        if(this.state != State.INITIATED) throw("wrong state exception");
+        if(ack.protocol === "WebRTC"){
+            this.rtcPeerConnection.setRemoteDescription(
+                {sdp : ack.body[0], type : "answer"}
+            );
+            //flow continues in switch (self.rtcPeerConnection.iceConnectionState)
+
+        }else if(ack.protocol == "WebSocket-Provider"){
+            this.terminateRTC();
+            this.connectToWebSocket(ack.body[0]);
+            this.socket.onmessage = (event : MessageEvent) => self.onMessage(event.data);
+        }
+    }
+
+    close(): void {
+        if(this.state === State.CLOSED) return;
+        this.state = State.CLOSED;
+        this.terminateRTC();
+        this.onClose();
     }
 
     send(message: string): void {
@@ -202,4 +166,5 @@ export class PhysicalChrome implements Physical{
     setOnOpen(f: () => void): void {
         this.onOpen = f;
     }
+
 }
